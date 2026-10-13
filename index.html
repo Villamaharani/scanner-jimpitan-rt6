@@ -1,0 +1,187 @@
+
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Scanner Jimpitan RT 6 RW 9</title>
+
+  <script src="https://unpkg.com/html5-qrcode"></script>
+
+  <style>
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      padding: 20px;
+      font-family: Arial, sans-serif;
+      background: #f1f5f9;
+      color: #1e293b;
+    }
+
+    .kartu {
+      max-width: 480px;
+      margin: 20px auto;
+      padding: 22px;
+      background: white;
+      border-radius: 18px;
+      box-shadow: 0 4px 18px #00000012;
+      text-align: center;
+    }
+
+    h2 { margin-top: 0; color: #166534; }
+    p { line-height: 1.5; }
+
+    #reader {
+      width: 100%;
+      margin: 18px auto;
+    }
+
+    button {
+      width: 100%;
+      padding: 14px;
+      border: 0;
+      border-radius: 10px;
+      background: #15803d;
+      color: white;
+      font-size: 16px;
+      font-weight: bold;
+      cursor: pointer;
+    }
+
+    button:disabled {
+      background: #94a3b8;
+    }
+
+    #status {
+      margin-top: 16px;
+      padding: 12px;
+      background: #f0fdf4;
+      border-radius: 8px;
+      overflow-wrap: anywhere;
+    }
+
+    .catatan {
+      font-size: 13px;
+      color: #64748b;
+    }
+  </style>
+</head>
+
+<body>
+  <div class="kartu">
+    <h2>JIMPITAN RT 6 RW 9</h2>
+    <p>Scanner QR pembayaran jimpitan warga</p>
+
+    <div id="reader"></div>
+
+    <button id="mulai" onclick="mulaiScanner()">
+      Buka Kamera dan Scan QR
+    </button>
+
+    <div id="status">
+      Tekan tombol untuk mulai memindai QR rumah.
+    </div>
+
+    <p class="catatan">
+      Izinkan akses kamera jika diminta. Gunakan QR rumah
+      yang sudah terdaftar pada aplikasi Jimpitan.
+    </p>
+  </div>
+
+  <script>
+    const URL_APPS_SCRIPT =
+      "https://script.google.com/macros/s/AKfycbwwLa85zoRB8XkEDZi4tlu_DAdUq05GcBgnQUIWNU-nSSOMzQurVRqGAG79ueRdknRh/exec";
+
+    let scanner = null;
+    let sedangProses = false;
+
+    function setStatus(pesan) {
+      document.getElementById("status").textContent = pesan;
+    }
+
+    function ambilToken(teksQR) {
+      const teks = teksQR.trim();
+
+      // Jika QR berisi URL dengan parameter token atau scan
+      try {
+        const url = new URL(teks);
+        const token =
+          url.searchParams.get("scan") ||
+          url.searchParams.get("token") ||
+          url.searchParams.get("Token_QR");
+
+        if (token) return token.trim();
+      } catch (e) {
+        // QR bukan URL, lanjutkan sebagai token biasa
+      }
+
+      // Jika QR langsung berisi token
+      return teks;
+    }
+
+    async function mulaiScanner() {
+      if (sedangProses) return;
+
+      if (!window.Html5Qrcode) {
+        setStatus("Library scanner gagal dimuat. Periksa koneksi internet.");
+        return;
+      }
+
+      document.getElementById("mulai").disabled = true;
+      setStatus("Meminta akses kamera...");
+
+      try {
+        scanner = new Html5Qrcode("reader");
+
+        await scanner.start(
+          { facingMode: "environment" },
+          {
+            fps: 10,
+            qrbox: { width: 240, height: 240 }
+          },
+          async function(teksQR) {
+            if (sedangProses) return;
+
+            const token = ambilToken(teksQR);
+
+            if (!token) {
+              setStatus("Token QR kosong. Silakan coba lagi.");
+              return;
+            }
+
+            sedangProses = true;
+            setStatus("QR terbaca. Membuka halaman jimpitan...");
+
+            try {
+              await scanner.stop();
+            } catch (e) {}
+
+            const tujuan =
+              URL_APPS_SCRIPT +
+              "?scan=" + encodeURIComponent(token);
+
+            window.location.href = tujuan;
+          },
+          function() {
+            // QR belum terbaca; kamera tetap berjalan
+          }
+        );
+
+        setStatus("Kamera aktif. Arahkan ke QR rumah warga.");
+      } catch (err) {
+        document.getElementById("mulai").disabled = false;
+        setStatus(
+          "Kamera gagal dibuka. Izinkan akses kamera dan buka halaman melalui HTTPS. Detail: " +
+          (err.message || err)
+        );
+
+        if (scanner) {
+          try { await scanner.clear(); } catch (e) {}
+          scanner = null;
+        }
+      }
+    }
+  </script>
+</body>
+</html>
